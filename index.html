@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+<title>3D Corner Animation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600&family=Syne:wght@700;800&display=swap">
+<style>
+/* Layout: heading on top, a large 3D stage with a control panel beside it (stacked on phones). */
+:root {
+  --bg: #eceff4;
+  --surface: #f8f9fb;
+  --line: #d3d9e3;
+  --fg: #12151c;
+  --muted: #566074;
+  --accent: #2b55f5;
+  --accent-ink: #ffffff;
+  --stage-line: #c4cbd8;
+  --font-display: "Syne", "Hind Siliguri", system-ui, sans-serif;
+  --font-body: "Hind Siliguri", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1017; --surface: #151a24; --line: #263041; --fg: #e7ebf3;
+    --muted: #8d98ab; --accent: #7f9bff; --accent-ink: #0d1017; --stage-line: #2b3549;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1017; --surface: #151a24; --line: #263041; --fg: #e7ebf3;
+  --muted: #8d98ab; --accent: #7f9bff; --accent-ink: #0d1017; --stage-line: #2b3549;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app {
+  max-width: 1180px; margin: 0 auto;
+  display: grid; gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.head h1 {
+  font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+  font-size: clamp(26px, 5vw, 40px); line-height: 1.1; margin: 0 0 6px; text-wrap: balance;
+}
+.head p { margin: 0; color: var(--muted); max-width: 62ch; }
+
+.stage {
+  position: relative; overflow: hidden; border-radius: 14px;
+  border: 1px solid var(--stage-line); background: #0b0d14;
+  aspect-ratio: 4 / 3; min-width: 0;
+}
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+.stage-note {
+  position: absolute; left: 12px; bottom: 10px; right: 12px;
+  font-size: 12px; color: rgba(255,255,255,0.62); pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.drop {
+  position: absolute; inset: 10px; border: 2px dashed #fff; border-radius: 10px;
+  display: grid; place-items: center; background: rgba(10,12,20,0.72);
+  color: #fff; font-weight: 600; font-size: 18px;
+}
+.fail { color: #fff; padding: 24px; }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px; display: grid; gap: 18px; align-content: start; min-width: 0;
+}
+.group { display: grid; gap: 8px; min-width: 0; }
+.label {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+  display: flex; justify-content: space-between; gap: 8px;
+}
+.label output { color: var(--fg); font-variant-numeric: tabular-nums; letter-spacing: 0; text-transform: none; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+button, .filebtn {
+  font: inherit; color: var(--fg); cursor: pointer;
+  background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; min-height: 40px; text-align: center;
+}
+button:hover, .filebtn:hover { border-color: var(--accent); }
+button:focus-visible, .filebtn:focus-within, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.filebtn { display: block; position: relative; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.fname { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.linkbtn { border: 0; padding: 0; min-height: 0; color: var(--accent); text-decoration: underline; justify-self: start; }
+
+.seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+
+input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+input[type="color"] {
+  width: 48px; height: 38px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer;
+}
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.status { min-height: 1.4em; font-size: 13px; color: var(--accent); margin: 0; }
+
+@media (min-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  .head { grid-column: 1 / -1; }
+  .stage { aspect-ratio: auto; height: clamp(440px, 74vh, 760px); }
+}
+</style>
+
+</head>
+<body>
+<main class="app">
+  <header class="head">
+    <h1>3D Corner Animation</h1>
+    <p>আপনার লোগো দিন। লোগোটি ৩ডি কোণে ভাঁজ হয়ে অ্যানিমেট হবে। ডানে-বামে টেনে ঘুরিয়ে দেখা যায়।</p>
+  </header>
+
+  <section class="stage" id="stage" aria-label="৩ডি প্রিভিউ">
+    <canvas id="gl"></canvas>
+    <div class="stage-note">ছবির ওপর আঙুল বা মাউস টেনে ঘোরান। লোগো ফাইল এখানে ছেড়েও দিতে পারেন।</div>
+    <div class="drop" id="drop" hidden>লোগো এখানে ছাড়ুন</div>
+  </section>
+
+  <aside class="panel">
+    <div class="group">
+      <div class="label">লোগো</div>
+      <label class="filebtn">লোগো বাছাই করুন
+        <input type="file" id="file" accept="image/*">
+      </label>
+      <div class="fname" id="fname">নমুনা লোগো দেখানো হচ্ছে</div>
+      <p class="hint">PNG, SVG বা JPG দিন। স্বচ্ছ ব্যাকগ্রাউন্ডের PNG সবচেয়ে ভালো দেখায়।</p>
+      <button class="linkbtn" id="reset" type="button">নমুনা লোগোতে ফিরুন</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="group">
+      <div class="label">অ্যানিমেশন</div>
+      <div class="seg" id="modes">
+        <button type="button" data-mode="fold" aria-pressed="true">ভাঁজ খোলা</button>
+        <button type="button" data-mode="drop" aria-pressed="false">ঝুপ করে পড়া</button>
+        <button type="button" data-mode="orbit" aria-pressed="false">ঘূর্ণি</button>
+        <button type="button" data-mode="breathe" aria-pressed="false">শ্বাস</button>
+      </div>
+      <label class="check"><input type="checkbox" id="loop" checked> বারবার চলবে</label>
+    </div>
+
+    <div class="group">
+      <div class="label">কোণের ধরন</div>
+      <div class="seg" id="corners">
+        <button type="button" data-corner="out" aria-pressed="true">বাইরের কোণ</button>
+        <button type="button" data-corner="in" aria-pressed="false">ভেতরের কোণ</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label class="label" for="angle">কোণের মাপ <output id="angleOut">90°</output></label>
+      <input type="range" id="angle" min="60" max="140" step="1" value="90">
+    </div>
+
+    <div class="group">
+      <label class="label" for="speed">গতি <output id="speedOut">1.0×</output></label>
+      <input type="range" id="speed" min="0.4" max="2" step="0.1" value="1">
+    </div>
+
+    <div class="group">
+      <div class="label">রং</div>
+      <div class="row">
+        <label class="row" for="panelColor">প্যানেল <input type="color" id="panelColor" value="#ffffff"></label>
+        <label class="check"><input type="checkbox" id="transp"> স্বচ্ছ</label>
+      </div>
+      <div class="row">
+        <label class="row" for="bgColor">পেছনের রং <input type="color" id="bgColor" value="#0b0d14"></label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary" id="replay">পুনরায় চালান</button>
+      <button type="button" id="pause">থামান</button>
+    </div>
+    <p class="hint">ভিডিও রাখতে চাইলে ফোনের স্ক্রিন রেকর্ড চালু করে অ্যানিমেশন চালান।</p>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), cv = $('gl');
+  if (typeof THREE === 'undefined') { stage.innerHTML = '<p class="fail">৩ডি লাইব্রেরি লোড হয়নি। পেজ রিফ্রেশ করুন।</p>'; return; }
+
+  var renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); }
+  catch (e) { stage.innerHTML = '<p class="fail">এই ব্রাউজারে WebGL চালু নেই, তাই ৩ডি দেখানো যাচ্ছে না।</p>'; return; }
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
+
+  /* ---------- logo texture ---------- */
+  var TW = 2048, TH = 1024;
+  var texCanvas = document.createElement('canvas');
+  texCanvas.width = TW; texCanvas.height = TH;
+  var tex = new THREE.CanvasTexture(texCanvas);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  var logoSrc = null, isSample = true;
+  function drawSample() {
+    var c = document.createElement('canvas'); c.width = 800; c.height = 400;
+    var g = c.getContext('2d');
+    var grad = g.createLinearGradient(90, 90, 310, 310);
+    grad.addColorStop(0, '#2b55f5'); grad.addColorStop(1, '#00c2a8');
+    g.lineWidth = 36; g.strokeStyle = grad;
+    g.beginPath(); g.arc(200, 200, 104, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = grad; g.beginPath(); g.arc(200, 200, 42, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#12151c'; g.textBaseline = 'alphabetic';
+    g.font = '800 96px Syne, "Hind Siliguri", sans-serif';
+    g.fillText('YOUR', 360, 208);
+    g.fillText('LOGO', 360, 312);
+    return c;
+  }
+  logoSrc = drawSample();
+
+  var panelColor = $('panelColor'), transp = $('transp'), bgColor = $('bgColor');
+  var material;
+  function compose() {
+    var g = texCanvas.getContext('2d');
+    g.clearRect(0, 0, TW, TH);
+    if (!transp.checked) { g.fillStyle = panelColor.value; g.fillRect(0, 0, TW, TH); }
+    var sw = logoSrc.naturalWidth || logoSrc.width || 512;
+    var sh = logoSrc.naturalHeight || logoSrc.height || 512;
+    var s = Math.min(TW * 0.64 / sw, TH * 0.64 / sh);
+    var w = sw * s, h = sh * s;
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(logoSrc, (TW - w) / 2, (TH - h) / 2, w, h);
+    tex.needsUpdate = true;
+    if (material) {
+      material.transparent = transp.checked;
+      material.alphaTest = transp.checked ? 0.02 : 0;
+      material.needsUpdate = true;
+    }
+  }
+
+  /* ---------- the folded sheet: two quads meeting at a crease ---------- */
+  var A = 2.2, H = 1.1;
+  var pos = new Float32Array(8 * 3);
+  var uv = new Float32Array([0,1, 0,0, .5,0, .5,1,  .5,1, .5,0, 1,0, 1,1]);
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex([0,1,2, 0,2,3, 4,5,6, 4,6,7]);
+  material = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.38, metalness: 0.08 });
+  var sheet = new THREE.Mesh(geo, material);
+  sheet.frustumCulled = false;
+
+  var crease = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.014, 0.014, H * 2, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+  );
+  var rig = new THREE.Group();
+  rig.add(sheet); rig.add(crease);
+  scene.add(rig);
+
+  var outside = true;
+  function setFold(deg) {
+    var al = deg * Math.PI / 360;
+    var x = A * Math.sin(al), z = (outside ? -1 : 1) * A * Math.cos(al);
+    var v = [
+      -x, H, z,  -x, -H, z,  0, -H, 0,  0, H, 0,
+       0, H, 0,   0, -H, 0,  x, -H, z,   x, H, z
+    ];
+    for (var i = 0; i < v.length; i++) pos[i] = v[i];
+    geo.attributes.position.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+
+  /* soft ground shadow */
+  var sc = document.createElement('canvas'); sc.width = sc.height = 256;
+  var sg = sc.getContext('2d');
+  var rg = sg.createRadialGradient(128, 128, 0, 128, 128, 128);
+  rg.addColorStop(0, 'rgba(0,0,0,0.6)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+  sg.fillStyle = rg; sg.fillRect(0, 0, 256, 256);
+  var shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.4, 6.4),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = -1.75;
+  scene.add(shadow);
+
+  /* lights */
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  var key = new THREE.DirectionalLight(0xffffff, 0.95); key.position.set(4, 5, 6); scene.add(key);
+  var fill = new THREE.DirectionalLight(0xa9c1ff, 0.4); fill.position.set(-5, 1, 3); scene.add(fill);
+  var rim = new THREE.PointLight(0x7fa0ff, 0.9, 20); scene.add(rim);
+
+  /* ---------- easing ---------- */
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function outCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function inCubic(t) { return t * t * t; }
+  function inOut(t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function outBack(t) { var c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+  function bounceOut(t) {
+    var n = 7.5625, d = 2.75;
+    if (t < 1 / d) return n * t * t;
+    if (t < 2 / d) { t -= 1.5 / d; return n * t * t + .75; }
+    if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + .9375; }
+    t -= 2.625 / d; return n * t * t + .984375;
+  }
+
+  /* ---------- state ---------- */
+  var mode = 'fold', A0 = 90, speed = 1, tm = 0, paused = false;
+  var dragYaw = 0;
+  var loopEl = $('loop');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { paused = true; tm = 2.2; $('pause').textContent = 'চালু করুন'; }
+
+  function pose(t) {
+    var p = { alpha: A0, y: 0, spin: 0, yaw: 0, scale: 1 };
+    var loop = loopEl.checked, c, k;
+    if (mode === 'fold') {
+      c = loop ? t % 7 : Math.min(t, 3);
+      if (c < 1.6) k = outBack(c / 1.6);
+      else if (c < 5.4) k = 1;
+      else if (c < 6.6) k = 1 - inOut((c - 5.4) / 1.2);
+      else k = 0;
+      p.alpha = 180 + (A0 - 180) * k;
+      p.yaw = Math.sin(t * 0.7) * 0.28;
+    } else if (mode === 'drop') {
+      c = loop ? t % 6 : Math.min(t, 2);
+      if (c < 1.4) { var q = c / 1.4; p.y = 4 * (1 - bounceOut(q)); p.spin = (1 - outCubic(q)) * Math.PI; }
+      else if (c > 5.2) { var r = (c - 5.2) / 0.8; p.y = 4 * inCubic(r); p.spin = -r * 0.8; }
+      p.yaw = Math.sin(t * 0.6) * 0.25;
+    } else if (mode === 'orbit') {
+      p.yaw = t * 0.8;
+      p.scale = 0.6 + 0.4 * outCubic(Math.min(t / 0.8, 1));
+    } else {
+      p.alpha = Math.min(178, A0 + 40 * (0.5 - 0.5 * Math.cos(t * 1.4)));
+      p.yaw = Math.sin(t * 0.5) * 0.3;
+    }
+    return p;
+  }
+
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w / h < 1.2 ? 46 : 38;
+    camera.updateProjectionMatrix();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!paused) tm += dt * speed;
+    var p = pose(tm);
+    setFold(p.alpha);
+    rig.position.y = p.y; rig.rotation.y = p.spin; rig.scale.setScalar(p.scale);
+    var s = clamp(1 - p.y / 7, 0.3, 1);
+    shadow.scale.set(s, s, 1); shadow.material.opacity = s;
+    var yaw = p.yaw + dragYaw, pitch = 0.2, dist = 7.6;
+    camera.position.set(Math.sin(yaw) * dist * Math.cos(pitch), Math.sin(pitch) * dist, Math.cos(yaw) * dist * Math.cos(pitch));
+    camera.lookAt(0, 0, 0);
+    rim.position.set(Math.sin(tm * 0.9) * 5, 2.2, 4);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- controls ---------- */
+  function press(group, attr, val) {
+    Array.prototype.forEach.call($(group).querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val));
+    });
+  }
+  $('modes').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    mode = b.getAttribute('data-mode'); press('modes', 'data-mode', mode); tm = 0;
+    if (paused && !reduce) { paused = false; $('pause').textContent = 'থামান'; }
+  });
+  $('corners').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    outside = b.getAttribute('data-corner') === 'out'; press('corners', 'data-corner', b.getAttribute('data-corner'));
+  });
+  $('angle').addEventListener('input', function (e) { A0 = +e.target.value; $('angleOut').textContent = A0 + '°'; });
+  $('speed').addEventListener('input', function (e) { speed = +e.target.value; $('speedOut').textContent = speed.toFixed(1) + '×'; });
+  panelColor.addEventListener('input', compose);
+  transp.addEventListener('change', compose);
+  bgColor.addEventListener('input', function () { stage.style.background = bgColor.value; renderer.setClearColor(bgColor.value, 1); });
+  renderer.setClearColor(bgColor.value, 1);
+  $('replay').addEventListener('click', function () { tm = 0; paused = false; $('pause').textContent = 'থামান'; });
+  $('pause').addEventListener('click', function () { paused = !paused; $('pause').textContent = paused ? 'চালু করুন' : 'থামান'; });
+
+  /* ---------- logo input ---------- */
+  var status = $('status'), fname = $('fname');
+  function say(m) { status.textContent = m; }
+  function loadFile(f) {
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { say('শুধু ছবির ফাইল (PNG, SVG, JPG) দিন।'); return; }
+    var r = new FileReader();
+    r.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        logoSrc = im; isSample = false; fname.textContent = f.name; say('লোগো বসানো হয়েছে।');
+        compose(); tm = 0; paused = false; $('pause').textContent = 'থামান';
+      };
+      im.onerror = function () { say('ছবিটি খোলা যায়নি। অন্য ফাইল চেষ্টা করুন।'); };
+      im.src = r.result;
+    };
+    r.onerror = function () { say('ফাইল পড়া যায়নি।'); };
+    r.readAsDataURL(f);
+  }
+  $('file').addEventListener('change', function (e) { loadFile(e.target.files[0]); e.target.value = ''; });
+  $('reset').addEventListener('click', function () {
+    logoSrc = drawSample(); isSample = true; fname.textContent = 'নমুনা লোগো দেখানো হচ্ছে'; say(''); compose(); tm = 0;
+  });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (n) { stage.addEventListener(n, function (e) { e.preventDefault(); drop.hidden = false; }); });
+  ['dragleave', 'drop'].forEach(function (n) { stage.addEventListener(n, function (e) { e.preventDefault(); drop.hidden = true; }); });
+  stage.addEventListener('drop', function (e) { loadFile(e.dataTransfer && e.dataTransfer.files[0]); });
+
+  /* drag to orbit */
+  var dragging = false, lastX = 0;
+  cv.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; try { cv.setPointerCapture(e.pointerId); } catch (x) {} });
+  cv.addEventListener('pointermove', function (e) { if (!dragging) return; dragYaw += (e.clientX - lastX) * 0.008; lastX = e.clientX; });
+  ['pointerup', 'pointercancel'].forEach(function (n) { cv.addEventListener(n, function () { dragging = false; }); });
+
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (isSample) { logoSrc = drawSample(); compose(); } });
+
+  compose(); resize(); setFold(A0);
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
